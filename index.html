@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mazes</title>
+</head>
+<body>
+    <h1>Mazes</h1>
+    <div id="ask">
+    </div>
+    <svg xmlns="http://www.w3.org/2000/svg" id="grid">
+    </svg>
+    <script>
+        //global variables
+        var width = 0; //width of grid
+        var height = 0; // height of grid
+        var grid; //grid element in html
+        var ask = document.getElementById("ask"); //ask element in html where we will ask user stuff
+        var start = "no"; //start position in maze
+        var end = "no"; //end position in maze
+        var time; //time per step in algorithm
+        var done; //whether path from start to end found
+        //ask user for dimensions of grid
+        ask.innerHTML += "height <input type=\"number\" name=\"height\" min=\"1\" id=\"hfrm\"><br>";
+        ask.innerHTML += "width <input type=\"number\" name=\"width\" min=\"1\" id=\"wfrm\"><br>";
+        ask.innerHTML += "<input type=\"button\" onclick=\"grid()\" value=\"make grid\"><br>";
+        //make grid
+        function grid() {
+            //get dimensions from user
+            width = document.getElementById("wfrm").value;
+            height = document.getElementById("hfrm").value;
+            //tell user when their input is bad
+            if (width <= 1 || height <= 1) {
+                ask.innerHTML += "<p>too small for a maze</p>";
+                return 0;
+            } else if (width == "" || height == "") {
+                ask.innerHTML += "<p>you have to fill in both boxes</p>";
+                return 0;
+            }
+            //set dimensions and stuff for grid in html
+            grid = document.getElementById("grid");
+            grid.setAttribute("viewBox", "0 0 "+width+" "+height);
+            grid.style = "width:"+100+"vw;"+"height:"+69+"vh;";
+            //make rectangles and lines for grid using for loops
+            for (var i = 0; i < width; i++) {
+                for (var j = 0; j < height; j++) {
+                    makeRect(i+" "+j, i, j);
+                    if (i < width-1) { //make sure no out of bounds
+                        makeLine(i+" "+j+" x", i+1, j, i+1, j+1);
+                    }
+                    if (j < height-1) { //make sure no out of bounds
+                        makeLine(i+" "+j+" y", i, j+1, i+1, j+1);
+                    }
+                }
+            }
+            //make sides of maze
+            makeLine("edge0", 0, 0, width, 0);
+            makeLine("edge1", width, 0, width, height);
+            makeLine("edge2", width, height, 0, height);
+            makeLine("edge3", 0, height, 0, 0);
+            //tell user to select their start square
+            ask.innerHTML = "select start";
+        }
+        //function that is called when rectangle clicked and it sets start and end of maze
+        function setRect(id) {
+            //make sure user doesnt select 2 starts or same start and end with conditionals
+            if (start == "no") {
+                start = id;
+                document.getElementById(id).style.fill = "red";
+                ask.innerHTML = "select finish";
+            } else if (end == "no" && start != id) {
+                end = id;
+                document.getElementById(id).style.fill = "blue";
+                //ask user for algorithm they wanna use for generation
+                ask.innerHTML = "select algorithm<br>";
+                ask.innerHTML += "<input type=\"radio\" id=\"dfs\" name=\"alg\" value=\"dfs\"><label for=\"dfs\">dfs</label><br>";
+                ask.innerHTML += "<input type=\"radio\" id=\"kruskal\" name=\"alg\" value=\"kruskal\"><label for=\"kruskal\">kruskal</label><br>";
+                ask.innerHTML += "<input type=\"radio\" id=\"prim\" name=\"alg\" value=\"prim\"><label for=\"prim\">prim</label><br>";
+                ask.innerHTML += "time(ms)/step (0 skips animation) <input type=\"number\" name=\"time\" min=\"0\" id=\"time\"><br>";
+                ask.innerHTML += "<input type=\"button\" value=\"make maze\" onclick=\"genMaze()\">";
+            }
+        }
+        //this is where the algorithms get called from
+        function genMaze() {
+            //get time/step from user
+            time = document.getElementById("time").value;
+            //make sure that blank input = 0
+            if (time == "") {
+                time = 0;
+            }
+            //decide algorithm
+            var alg = "";
+            if (document.getElementById("dfs").checked) {
+                alg = "dfs";
+            }
+            if (document.getElementById("kruskal").checked) {
+                alg = "kruskal";
+            }
+            if (document.getElementById("prim").checked) {
+                alg = "prim";
+            }
+            //tell user when no selection
+            if (alg == "") {
+                ask.innerHTML += "<p>you have to pick an algorithm</p>"
+            }
+            //run dfs
+            if (alg == "dfs") {
+                ask.innerHTML = "";
+                //visited keeps track of which cells have been visited and should not be revisited
+                var visited = [];
+                for (var i = 0; i < height; i++) {
+                    visited.push([]);
+                    for (var j = 0; j < width; j++) {
+                        visited[i].push(0);
+                    }
+                }
+                //stack keeps track of the path we are currently on, so we can backtrack if stuck, and keep track of solution
+                var stack = [start];
+                done = 0;
+                //if time=0, skip animation
+                if (time == 0) {
+                    while (stack.length > 0) {
+                        dfs(visited, stack);
+                    }
+                } else { //otherwise, setTimeout so delay between each step in dfs
+                    function dfsloop() {
+                        setTimeout(function() {
+                            dfs(visited, stack);
+                            if (stack.length > 0) {
+                                dfsloop();
+                            }
+                        }, time);
+                    }
+                    dfsloop();
+                }
+            }
+            //run kruskal
+            if (alg == "kruskal") {
+                ask.innerHTML = "";
+                //keep track of edges so we can remove edges to join sets of cells
+                var edges = [];
+                for (var i = 0; i < width; i++) {
+                    for (var j = 0; j < height; j++) {
+                        if (i < width-1) {
+                            edges.push(i+" "+j+" x");
+                        }
+                        if (j < height-1) {
+                            edges.push(i+" "+j+" y");
+                        }
+                    }
+                }
+                //shuffle the edges array so that maze is randomized
+                var cur = edges.length;
+                while (cur != 0) {
+                    rand = Math.floor(Math.random()*cur);
+                    cur--;
+                    [edges[cur], edges[rand]] = [edges[rand], edges[cur]];
+                }
+                //parent is basically how we'll determine which set a cell is part of
+                var parent = [];
+                for (var i = 0; i < width; i++) {
+                    parent.push([])
+                    for (var j = 0; j < height; j++) {
+                        //every cell starts as its own set, and as we remove edges, sets will join until we have a maze!
+                        parent[i].push(i+" "+j);
+                        if (i+" "+j != start && i+" "+j != end) {
+                            //start with them all black and turn them white edge by edge
+                            document.getElementById(i+" "+j).style.fill = "black";
+                        }
+                    }
+                }
+                var i = 0;
+                done = 0;
+                //if time=0, dont delay
+                if (time == 0) {
+                    while (i < edges.length) {
+                        kruskal(edges, parent, i);
+                        i++;
+                    }
+                } else { //otherwise, yes delay
+                    function kruskalloop() {
+                        setTimeout(function() {
+                            kruskal(edges, parent, i);
+                            i++;
+                            if (i < edges.length) {
+                                kruskalloop();
+                            }
+                        }, time);
+                    }
+                    kruskalloop();
+                }
+            }
+            //run prim
+            if (alg == "prim") {
+                ask.innerHTML = "";
+                //lots of arrays to keep track of stuff
+                var visited = [];
+                var parent = [];
+                var inadjacent = [];
+                //initialize all these arrays
+                for (var i = 0; i < width; i++) {
+                    visited.push([]);
+                    parent.push([]);
+                    inadjacent.push([]);
+                    for (var j = 0; j < height; j++) {
+                        visited[i].push(0);
+                        parent[i].push("");
+                        inadjacent[i].push(0);
+                    }
+                }
+                //we start our algorithm from the start
+                var adjacent = [start];
+                //start is obviously in the array adjacent, so we mark that
+                inadjacent[start.split(" ")[0]][start.split(" ")[1]] = 1;
+                //if time=0 no delay
+                if (time == 0) {
+                    while (adjacent.length > 0) {
+                        prim(visited, adjacent, parent, inadjacent);
+                    }
+                } else { //otherwise yes delay
+                    function primloop() {
+                        setTimeout(function() {
+                            prim(visited, adjacent, parent, inadjacent);
+                            if (adjacent.length > 0) {
+                                primloop();
+                            }
+                        }, time);
+                    }
+                    primloop();
+                }
+            }
+            //give user option to make a new maze if already generated one
+            if (alg != "") {
+                ask.innerHTML += "<input type=\"button\" value=\"new maze\" onclick=\"location.reload()\">";
+            }
+        }
+        //dfs stuff
+        function dfs(vis, pq) {
+            //we run dfs on the top of the stack
+            var id = pq[pq.length-1];
+            //do color stuff so it looks cool to user
+            if (document.getElementById(id).style.fill != "green" && document.getElementById(id).style.fill != "orange" && id != start && id != end) {
+                document.getElementById(id).style.fill = "white";
+            }
+            if (document.getElementById(id).style.fill == "orange") {
+                document.getElementById(id).style.fill = "green";
+            }
+            //mark as visited
+            x = parseInt(id.split(" ")[0]);
+            y = parseInt(id.split(" ")[1]);
+            vis[y][x] = 1;
+            if (id == end) {
+                done = 1;
+            }
+            if (done == 0) { //if we havent found end yet, we will mark as green so that user can see maze solution
+                if (id != start) {
+                    document.getElementById(id).style.fill = "green";
+                }
+            }
+            //check which neighbors are visitable
+            var next = [];
+            if (x+1<width && vis[y][x+1] == 0) {
+                next.push((x+1)+" "+y);
+            }
+            if (x-1>=0 && vis[y][x-1] == 0) {
+                next.push((x-1)+" "+y);
+            }
+            if (y-1>=0 && vis[y-1][x] == 0) {
+                next.push(x+" "+(y-1));
+            }
+            if (y+1<height && vis[y+1][x] == 0) {
+                next.push(x+" "+(y+1));
+            }
+            if (next.length == 0 || id == end) { //if no neighbors, we must backtrack by popping stack
+                pq.pop();
+                //do color stuff based on conditions
+                if (done == 0) {
+                    document.getElementById(id).style.fill = "white";
+                }
+                if (id == end) {
+                    document.getElementById(id).style.fill = "blue";
+                } else if (id == start) {
+                    document.getElementById(id).style.fill = "red";
+                }
+                if (document.getElementById(pq[pq.length-1]).style.fill != "green") {
+                    document.getElementById(pq[pq.length-1]).style.fill = "yellow";
+                } else {
+                    document.getElementById(pq[pq.length-1]).style.fill = "orange";
+                }
+            } else { //otherwise pick a random neighbor and push it to stack
+                var idx = Math.floor(Math.random()*next.length);
+                var x1 = parseInt(next[idx].split(" ")[0]);
+                var y1 = parseInt(next[idx].split(" ")[1]);
+                if (x1 == x) {
+                    document.getElementById(x+" "+Math.min(y, y1)+" y").remove();
+                } else {
+                    document.getElementById(Math.min(x1, x)+" "+y+" x").remove();
+                }
+                document.getElementById(next[idx]).style.fill = "yellow";
+                pq.push(next[idx]);
+            }
+        }
+        //kruskal stuff
+        function kruskal(e, p, idx) {
+            //given edge, v1 and v2 are the 2 cells that touch that edge
+            var v1 = e[idx].split(" ")[0]+" "+e[idx].split(" ")[1];
+            var v2;
+            //figure out the v2 based on v1 and direction of edge
+            if (e[idx].split(" ")[2] == "x") {
+                v2 = (1+parseInt(e[idx].split(" ")[0]))+" "+e[idx].split(" ")[1]
+            } else {
+                v2 = e[idx].split(" ")[0]+" "+(1+parseInt(e[idx].split(" ")[1]));
+            }
+            //since maze starts black, we have to turn it white again
+            if (v1 != end && v1 != start) {
+                document.getElementById(v1).style.fill = "white";
+            }
+            if (v2 != end && v2 != start) {
+                document.getElementById(v2).style.fill = "white";
+            }
+            //check if v1 and v2 are in same set. if they are already same set then we cant remove edge, or no tree
+            if ((findset(p, v1) != findset(p, v2)) && ((v1 != end && v2 != end) || done == 0)) {
+                document.getElementById(e[idx]).remove();
+                p[findset(p, v1).split(" ")[0]][findset(p, v1).split(" ")[1]] = v2;
+            }
+            //say when path from start to end found
+            if (v1 == end || v2 == end) {
+                done = 1;
+            }
+        }
+        //prim stuff
+        function prim(vis, adj, par, inadj) {
+            //pick random cell from adj to run prim on
+            var sussy = Math.floor(Math.random()*adj.length);
+            var addid = adj[sussy];
+            adj.splice(sussy, 1);
+            var x = parseInt(addid.split(" ")[0]);
+            var y = parseInt(addid.split(" ")[1]);
+            //mark cell as visited and not in adjacent anymore. we use -1 insted of 0 so it never gets marked
+            vis[x][y] = 1;
+            inadj[x][y] = -1;
+            if (addid != end && addid != start && document.getElementById(addid).style.fill != "green") {
+                document.getElementById(addid).style.fill = "white";
+            }
+            //check neighbors of cell. if visited we can join to current cell. otherwise we add to adj.
+            var prev = [];
+            if (x-1 >= 0) {
+                if (vis[x-1][y] == 1 && (x-1)+" "+y != end) {
+                    prev.push((x-1)+" "+y);
+                } else if (inadj[x-1][y] == 0) {
+                    adj.push((x-1)+" "+y);
+                    inadj[x-1][y] = 1;
+                    if (adj[adj.length-1] != end && document.getElementById(adj[adj.length-1]).style.fill != "green") {
+                        document.getElementById(adj[adj.length-1]).style.fill = "orange";
+                    }
+                }
+            }
+            if (x+1 < width) {
+                if (vis[x+1][y] == 1 && (x+1)+" "+y != end) {
+                    prev.push((x+1)+" "+y);
+                } else if (inadj[x+1][y] == 0) {
+                    adj.push((x+1)+" " +y);
+                    inadj[x+1][y] = 1;
+                    if (adj[adj.length-1] != end && document.getElementById(adj[adj.length-1]).style.fill != "green") {
+                        document.getElementById(adj[adj.length-1]).style.fill = "orange";
+                    }
+                }
+            }
+            if (y+1 < height) {
+                if (vis[x][y+1] == 1 && x+" "+(y+1) != end) {
+                    prev.push(x+" "+(y+1));
+                } else if (inadj[x][y+1] == 0) {
+                    adj.push(x+" "+(y+1));
+                    inadj[x][y+1] = 1;
+                    if (adj[adj.length-1] != end && document.getElementById(adj[adj.length-1]).style.fill != "green") {
+                        document.getElementById(adj[adj.length-1]).style.fill = "orange";
+                    }
+                }
+            }
+            if (y-1 >= 0) {
+                if (vis[x][y-1] == 1 && x+" "+(y-1) != end) {
+                    prev.push(x+" "+(y-1));
+                } else if (inadj[x][y-1] == 0) {
+                    adj.push(x+" "+(y-1));
+                    inadj[x][y-1] = 1;
+                    if (adj[adj.length-1] != end && document.getElementById(adj[adj.length-1]).style.fill != "green") {
+                        document.getElementById(adj[adj.length-1]).style.fill = "orange";
+                    }
+                }
+            }
+            if (prev.length > 0) {
+                //pick random cell we can connect to
+                var con = prev[Math.floor(Math.random()*prev.length)];
+                par[x][y] = con;
+                if (addid == end) {
+                    //if we found path we backtrack to show user
+                    var cur = par[end.split(" ")[0]][end.split(" ")[1]];
+                    while (cur != start) {
+                        document.getElementById(cur).style.fill = "green";
+                        cur = par[cur.split(" ")[0]][cur.split(" ")[1]];
+                    }
+                }
+                if (par[x][y] != end && par[x][y] != start && par[x][y] != "" && document.getElementById(par[x][y]).style.fill != "green") {
+                    document.getElementById(par[x][y]).style.fill = "white";
+                }
+                //remove edge between cur cell and cell we want to connect with
+                var conx = parseInt(con.split(" ")[0]);
+                var cony = parseInt(con.split(" ")[1]);
+                if (conx == x) {
+                    document.getElementById(x+" "+Math.min(y, cony)+" y").remove();
+                } else {
+                    document.getElementById(Math.min(conx, x)+" "+y+" x").remove();
+                }
+            }
+        }
+        //find which set a cell is part of
+        function findset(parent, i) {
+            //we just keep traveling up the subtree until we reach the root node
+            while (parent[parseInt(i.split(" ")[0])][parseInt(i.split(" ")[1])] != i) {
+                i = parent[parseInt(i.split(" ")[0])][parseInt(i.split(" ")[1])];
+            }
+            return i;
+        }
+        //helper function to make lines
+        function makeLine(id, x1, y1, x2, y2) {
+            var newLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            newLine.setAttribute('id',id);
+            newLine.setAttribute('x1',x1);
+            newLine.setAttribute('y1',y1);
+            newLine.setAttribute('x2',x2);
+            newLine.setAttribute('y2',y2);
+            newLine.style="stroke:black;stroke-width:0.01vw;";
+            grid.append(newLine);
+        }
+        //helper function to make rectangles
+        function makeRect(id, x, y) {
+            var newRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            newRect.setAttribute('id',id);
+            newRect.setAttribute('x',x);
+            newRect.setAttribute('y',y);
+            newRect.setAttribute('width',1);
+            newRect.setAttribute('height',1);
+            //we want to set rect to start or end after we click it
+            newRect.setAttribute('onclick', "setRect(\""+id+"\")");
+            newRect.style = "fill:white;";
+            grid.append(newRect);
+        }
+    </script>
+</body>
+</html>
